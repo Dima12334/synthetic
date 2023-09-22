@@ -1,60 +1,71 @@
 import re
-from collections import Counter
+from pprint import pprint
 
 with open("example.html", "r") as f:
     html = f.read()
 
-opened_tags = re.findall(r"<([a-z]+)(?![^>]*\/>)[^>]*>", html)
-closed_tags = re.findall(r"</([a-z]+)(?![^>]*\/>)[^>]*>", html)
-unclosed_tags = list((Counter(opened_tags) - Counter(closed_tags)).elements())
+
 all_tags = re.findall(r"<([^>]+)>", html)
+reversed_all_tags = all_tags[::-1]
 
 
-def remove_open_closed_tags(tags):  # ["body.div[0]", "body.div[1]"]
-    for index, tag in enumerate(tags):
-        max_index = len(tags) - 1
-        if index != max_index:
-            closed_tag = '/' + tag
-            next_tag = tags[index + 1]
-            if next_tag == closed_tag:
-                # Удаляем пару тегов и вызываем функцию без них
-                tags.pop(index)
-                tags.pop(index)
-                remove_open_closed_tags(tags)
-    return tags
-
-
-def main(tags):
-    outer_tags = []
+def convert_tag_to_dict(tags):
+    unused_closed_tags = []
     result = []
-    closed_outer_tags = []
-    inner_count = 0
-    for index, tag in enumerate(tags):
-        max_index = len(tags) - 1
-        if index != max_index:
-            closed_tag = '/' + tag if '/' not in tag else tag
-            closed_outer_tags.append(closed_tag)
-            next_tag = tags[index + 1]
-            closed_last_outer_tag = '/' + outer_tags[-1] if outer_tags else None
-            if tag == closed_tag:
-                continue
-            if next_tag != closed_tag and next_tag != tag and next_tag != closed_last_outer_tag:
-                outer_tags.append(tag)
+
+    for tag in tags:
+        if tag.startswith('/'):
+            if unused_closed_tags:
+                unused_closed_tags[-1]['child_count'] += 1
+            unused_closed_tags.append({'tag_name': tag, 'child_count': 0})
+        else:
+            closed_tag = '/' + tag
+            if unused_closed_tags and unused_closed_tags[-1]['tag_name'] == closed_tag:
+                tag_dict = dict(tag_name=tag, child_count=unused_closed_tags[-1]['child_count'],
+                                is_closed_tag=True, can_be_parent=True)
+                unused_closed_tags.pop()
             else:
-                outer_tag = ".".join(outer_tags)
-                unclosed_tag = f'{outer_tag}.{tag}[{inner_count}]'
-                result.append(unclosed_tag)
-                inner_count += 1
-                if next_tag == closed_last_outer_tag:
-                    outer_tags.pop()
+                tag_dict = dict(tag_name=tag, is_closed_tag=False, can_be_parent=False)
+
+                if unused_closed_tags:
+                    unused_closed_tags[-1]['child_count'] += 1
+            result.append(tag_dict)
+
+    return list(reversed(result))
+
+
+converted_tags = convert_tag_to_dict(reversed_all_tags)
+
+
+# ["body.div[0]", "body.div[1]"]
+def get_unclosed_tags(tags):
+    result = []
+    parent_stack = []
+    child_tags = {}
+
+    for tag in tags:
+        tag_name = tag['tag_name']
+        can_be_parent = tag['can_be_parent']
+
+        if can_be_parent:
+            parent_stack.append(tag)
+        else:
+            if parent_stack and parent_stack[-1]['child_count'] == 0:
+                parent_stack.pop()
+
+            parent = ".".join([tag['tag_name'] for tag in parent_stack]) + ('.' if parent_stack else '')
+            child_index = child_tags.get(parent, {}).get(tag_name, 0)
+            child_tags.setdefault(parent, {}).update({tag_name: child_index + 1})
+            result.append(f"{parent}{tag_name}[{child_index}]")
+
+            if parent_stack:
+                parent_stack[-1]['child_count'] -= 1
+
     return result
 
 
-my_tags = remove_open_closed_tags(all_tags)
-print(my_tags)
-print(main(my_tags))
-
-# print('opened_tags - ', opened_tags)
-# print('closed_tags - ', closed_tags)
-# print('unclosed_tags - ', unclosed_tags)
-# print('all_tags - ', all_tags)
+print(get_unclosed_tags(converted_tags))
+# print()
+# print(reversed_all_tags)
+# print()
+# pprint(converted_tags)
