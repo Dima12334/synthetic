@@ -5,8 +5,8 @@ with open("example.html", "r") as f:
     html = f.read()
 
 
-all_tags = re.findall(r"<([^>]+)>", html)
-reversed_all_tags = all_tags[::-1]
+tags = re.findall(r"<([^>]+)>", html)
+reversed_tags = tags[::-1]
 
 
 def convert_tag_to_dict(tags):
@@ -34,38 +34,50 @@ def convert_tag_to_dict(tags):
     return list(reversed(result))
 
 
-converted_tags = convert_tag_to_dict(reversed_all_tags)
+converted_tags = convert_tag_to_dict(reversed_tags)
 
 
 # ["body.div[0]", "body.div[1]"]
 def get_unclosed_tags(tags):
     result = []
-    parent_stack = []
+    parent_tags = []
     child_tags = {}
 
-    for tag in tags:
+    def _increment_child_index(append_child_to_result=False):
         tag_name = tag['tag_name']
-        can_be_parent = tag['can_be_parent']
+        parent = ".".join([p_tag['tag_name'] for p_tag in parent_tags]) + ('.' if parent_tags else '')
+        child_index = child_tags.get(parent, {}).get(tag_name, 0)
+        child_tags.setdefault(parent, {}).update({tag_name: child_index + 1})
 
-        if can_be_parent:
-            parent_stack.append(tag)
-        else:
-            if parent_stack and parent_stack[-1]['child_count'] == 0:
-                parent_stack.pop()
-
-            parent = ".".join([tag['tag_name'] for tag in parent_stack]) + ('.' if parent_stack else '')
-            child_index = child_tags.get(parent, {}).get(tag_name, 0)
-            child_tags.setdefault(parent, {}).update({tag_name: child_index + 1})
+        if append_child_to_result:
             result.append(f"{parent}{tag_name}[{child_index}]")
 
-            if parent_stack:
-                parent_stack[-1]['child_count'] -= 1
+    for tag in tags:
+        can_be_parent = tag['can_be_parent']
+
+        if can_be_parent and tag.get('child_count', 0) > 0:
+            _increment_child_index()
+            parent_tags.append(tag)
+        else:
+            if not can_be_parent:
+                _increment_child_index(append_child_to_result=True)
+
+            if parent_tags:
+                parent_tags[-1]['child_count'] -= 1
+
+                if parent_tags[-1]['child_count'] == 0:
+                    parent_tags.pop()
+                    for prnt in reversed(parent_tags):
+                        if prnt['child_count'] - 1 == 0:
+                            parent_tags.pop()
+                        else:
+                            break
 
     return result
 
 
 print(get_unclosed_tags(converted_tags))
 # print()
-# print(reversed_all_tags)
+# print(reversed_tags)
 # print()
 # pprint(converted_tags)
