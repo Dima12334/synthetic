@@ -5,8 +5,8 @@ with open("example.html", "r") as f:
     html = f.read()
 
 
-tags = re.findall(r"<([^>]+)>", html)
-reversed_tags = tags[::-1]
+html_tags = re.findall(r"<([^>]+)>", html)
+reversed_tags = html_tags[::-1]
 
 
 def convert_tag_to_dict(tags):
@@ -52,6 +52,10 @@ def get_unclosed_tags(tags):
         if append_child_to_result:
             result.append(f"{parent}{tag_name}[{child_index}]")
 
+    def _decrement_last_parent():
+        if parent_tags:
+            parent_tags[-1]['child_count'] -= 1
+
     for tag in tags:
         can_be_parent = tag['can_be_parent']
 
@@ -62,16 +66,23 @@ def get_unclosed_tags(tags):
             if not can_be_parent:
                 _increment_child_index(append_child_to_result=True)
 
-            if parent_tags:
-                parent_tags[-1]['child_count'] -= 1
+            if len(parent_tags) > 1:
+                _decrement_last_parent()
 
                 if parent_tags[-1]['child_count'] == 0:
                     parent_tags.pop()
+                    _decrement_last_parent()
                     for prnt in reversed(parent_tags):
-                        if prnt['child_count'] - 1 == 0:
+                        if prnt['child_count'] == 0:
                             parent_tags.pop()
+                            _decrement_last_parent()
                         else:
                             break
+            elif len(parent_tags) == 1:
+                _decrement_last_parent()
+                if parent_tags[-1]['child_count'] == 0:
+                    parent_tags.pop()
+                    _decrement_last_parent()
 
     return result
 
