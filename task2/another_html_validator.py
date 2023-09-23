@@ -40,17 +40,21 @@ converted_tags = convert_tag_to_dict(reversed_tags)
 
 
 # EXPECTED RESULT: ["body.div[0]", "body.div[1]"]
-# MY RESULT:
-# ['body.div[0]', 'body.div.p[0]', 'body.div.a[0]', 'body.div[2]',
-# 'body.div.div.a[0]', 'body.div.div.a[1]', 'body.div[4]', 'head.div[0]']
+# MY RESULT:    I added an index to each tag because tags can be repeated and it won't be clear which tag is open.
+# ['body[0].div[0]', 'body[0].div[1].p[0]', 'body[0].div[1].a[0]', 'body[0].div[2]',
+# 'body[0].div[3].div[0].a[0]', 'body[0].div[3].div[0].a[1]', 'body[0].div[4]', 'head[0].div[0]']
 def get_unclosed_tags(tags):
     result = []
     parent_tags = []
     child_tags = {}
 
-    def _incr_child_index(append_child_to_result=False):
+    def _build_parent_by_tagname():
         tag_name = tag['tag_name']
-        parent = ".".join([p_tag['tag_name'] for p_tag in parent_tags]) + ('.' if parent_tags else '')
+        parent = ".".join([p_tag['tag_name_with_index'] for p_tag in parent_tags]) + ('.' if parent_tags else '')
+        return tag_name, parent
+
+    def _incr_child_index(append_child_to_result=False):
+        tag_name, parent = _build_parent_by_tagname()
         child_index = child_tags.get(parent, {}).get(tag_name, 0)
         child_tags.setdefault(parent, {}).update({tag_name: child_index + 1})
 
@@ -65,6 +69,8 @@ def get_unclosed_tags(tags):
         can_be_parent = tag['can_be_parent']
 
         if can_be_parent and tag.get('child_count', 0) > 0:
+            tag_name, parent = _build_parent_by_tagname()
+            tag['tag_name_with_index'] = tag_name + f'[{child_tags.get(parent, {}).get(tag_name, 0)}]'
             _incr_child_index()
             parent_tags.append(tag)
         else:
